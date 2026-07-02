@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SOXL Semiconductor Dashboard</title>
+
+<style>
+body{
+font-family:Arial,sans-serif;
+background:#0f172a;
+color:#fff;
+margin:0;
+padding:20px;
+}
+
+h1{text-align:center;}
+
+.grid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+gap:15px;
+margin-bottom:20px;
+}
+
+.card{
+background:#1e293b;
+padding:15px;
+border-radius:12px;
+text-align:center;
+}
+
+.price{
+font-size:24px;
+font-weight:bold;
+}
+
+.green{color:#22c55e;}
+.red{color:#ef4444;}
+
+table{
+width:100%;
+border-collapse:collapse;
+background:#1e293b;
+border-radius:10px;
+overflow:hidden;
+}
+
+th,td{
+padding:12px;
+text-align:center;
+border-bottom:1px solid #334155;
+}
+
+th{
+cursor:pointer;
+background:#111827;
+}
+
+.heat{
+display:flex;
+gap:8px;
+flex-wrap:wrap;
+margin:20px 0;
+}
+
+.box{
+padding:12px;
+border-radius:8px;
+font-weight:bold;
+min-width:80px;
+text-align:center;
+}
+
+.updated{
+text-align:center;
+margin-top:15px;
+color:#94a3b8;
+}
+</style>
+</head>
+<body>
+
+<h1>SOXL Semiconductor Dashboard</h1>
+
+<div class="grid">
+<div class="card">
+<div>Sector Strength</div>
+<div class="price" id="strength">--</div>
+</div>
+
+<div class="card">
+<div>Estimated SOXL Bias</div>
+<div class="price" id="bias">--</div>
+</div>
+
+<div class="card">
+<div>Green Stocks</div>
+<div class="price" id="greens">--</div>
+</div>
+
+<div class="card">
+<div>Red Stocks</div>
+<div class="price" id="reds">--</div>
+</div>
+</div>
+
+<div class="heat" id="heatmap"></div>
+
+<table id="stockTable">
+<thead>
+<tr>
+<th onclick="sortTable(0)">Ticker</th>
+<th onclick="sortTable(1)">Price</th>
+<th onclick="sortTable(2)">% Change</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+
+<div class="updated" id="updated"></div>
+
+<script>
+
+const tickers=[
+"SOXL",
+"SOXX",
+"NVDA",
+"AVGO",
+"AMD",
+"MU",
+"TSM",
+"ASML"
+];
+
+let stockData=[];
+
+async function getQuote(ticker){
+
+const yahoo=
+`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ticker}`;
+
+const proxy=
+`https://api.allorigins.win/raw?url=${encodeURIComponent(yahoo)}`;
+
+const res=await fetch(proxy);
+const json=await res.json();
+
+return json.quoteResponse.result[0];
+}
+
+async function loadData(){
+
+stockData=[];
+
+let green=0;
+let red=0;
+
+for(const ticker of tickers){
+
+try{
+
+const q=await getQuote(ticker);
+
+const item={
+ticker:ticker,
+price:q.regularMarketPrice,
+change:q.regularMarketChangePercent
+};
+
+stockData.push(item);
+
+if(item.change>=0) green++;
+else red++;
+
+}catch(e){
+console.error(ticker,e);
+}
+}
+
+render(green,red);
+}
+
+function render(green,red){
+
+const tbody=document.querySelector("#stockTable tbody");
+tbody.innerHTML="";
+
+const heat=document.getElementById("heatmap");
+heat.innerHTML="";
+
+let totalChange=0;
+
+stockData.forEach(stock=>{
+
+totalChange+=stock.change;
+
+const tr=document.createElement("tr");
+
+tr.innerHTML=`
+<td>${stock.ticker}</td>
+<td>$${stock.price.toFixed(2)}</td>
+<td class="${stock.change>=0?'green':'red'}">
+${stock.change.toFixed(2)}%
+</td>
+`;
+
+tbody.appendChild(tr);
+
+const box=document.createElement("div");
+
+box.className="box";
+
+box.style.background=
+stock.change>=0 ? "#14532d" : "#7f1d1d";
+
+box.innerHTML=
+`${stock.ticker}<br>${stock.change.toFixed(2)}%`;
+
+heat.appendChild(box);
+
+});
+
+const strength=
+Math.round((green/tickers.length)*100);
+
+document.getElementById("strength").innerText=
+strength+"/100";
+
+document.getElementById("greens").innerText=green;
+document.getElementById("reds").innerText=red;
+
+const avg=totalChange/stockData.length;
+
+let bias="Neutral";
+
+if(avg>1) bias="Bullish";
+if(avg<-1) bias="Bearish";
+
+document.getElementById("bias").innerText=bias;
+
+document.getElementById("updated").innerText=
+"Updated: "+new Date().toLocaleString();
+}
+
+function sortTable(col){
+
+stockData.sort((a,b)=>{
+
+if(col===0)
+return a.ticker.localeCompare(b.ticker);
+
+if(col===1)
+return b.price-a.price;
+
+return b.change-a.change;
+});
+
+render(
+stockData.filter(x=>x.change>=0).length,
+stockData.filter(x=>x.change<0).length
+);
+}
+
+loadData();
+
+setInterval(loadData,60000);
+
+</script>
+
+</body>
+</html>
